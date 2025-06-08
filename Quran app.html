@@ -1,0 +1,345 @@
+<!DOCTYPE html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="UTF-8">
+  <title>توليد صور تفسير القرآن</title>
+  <style>
+    body {
+      margin: 0;
+      font-family: 'Amiri', serif;
+      background-color: #f5f5f5;
+      overflow-y: auto;
+    }
+    .container {
+      max-width: 600px;
+      margin: 20px auto;
+      padding: 0 20px;
+    }
+    .section.input {
+      background-color: #fff;
+      padding: 20px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      margin-bottom: 30px;
+    }
+    .section.preview {
+      background-color: #fafafa;
+      padding: 20px;
+      border: 2px solid #ddd;
+      border-radius: 10px;
+      margin-bottom: 30px;
+    }
+    .header {
+      text-align: center;
+      background-color: #004d99;
+      color: #fff;
+      padding: 10px;
+      border-radius: 10px 10px 0 0;
+      margin-bottom: 15px;
+      font-size: 1.5em;
+    }
+    .verses {
+      margin: 20px 0;
+      line-height: 2;
+      outline: none;
+    }
+    .verse-number {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      background: #e6e6e6;
+      color: #333;
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      margin: 0 3px;
+      font-size: 0.8em;
+    }
+    .basmala {
+      text-align: center;
+      font-size: 1.5em;
+      margin-bottom: 1em;
+    }
+    .interpretation {
+      border: 1px solid #ccc;
+      padding: 10px;
+      background: #f9f9f9;
+      border-radius: 8px;
+      text-align: justify;
+      margin-top: 15px;
+    }
+    .source-box {
+      border: 1px solid #ccc;
+      background: #d9edf7;
+      padding: 8px;
+      border-radius: 8px;
+      margin-top: 10px;
+      text-align: right;
+      font-size: 0.9em;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 8px;
+      margin: 10px 0;
+      font-size: 1em;
+      box-sizing: border-box;
+    }
+    .font-controls {
+      display: flex;
+      justify-content: center;
+      gap: 15px;
+      margin: 15px 0;
+    }
+    .font-controls button {
+      width: 40px;
+      height: 40px;
+      font-size: 1.2em;
+      border-radius: 50%;
+      border: none;
+      background: #004d99;
+      color: white;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .font-controls button:hover {
+      background: #003366;
+    }
+    .font-size-display {
+      text-align: center;
+      font-weight: bold;
+      margin: 10px 0;
+    }
+    button {
+      padding: 10px 20px;
+      font-size: 1em;
+      margin-top: 10px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- قسم إعدادات الإدخال -->
+    <div class="section input">
+      <h2>إعدادات الصورة</h2>
+      <label for="surahName">اسم السورة:</label>
+      <select id="surahName">
+        <option value="">جاري تحميل السور...</option>
+      </select>
+      
+      <label for="firstVerse">رقم الآية الأولى:</label>
+      <input type="number" id="firstVerse" min="1" placeholder="1">
+      
+      <label for="lastVerse">رقم الآية الأخيرة (اختياري):</label>
+      <input type="number" id="lastVerse" min="1" placeholder="">
+      
+      <!-- زر لجلب النص القرآني -->
+      <button id="fetchVerses">جلب النص القرآني</button>
+      
+      <label for="interpretationText">نص التفسير:</label>
+      <textarea id="interpretationText" rows="4" placeholder="اكتب التفسير هنا... استخدم **نجمتين** لإبراز الكلمات"></textarea>
+      
+      <label for="source">مصدر التفسير:</label>
+      <input type="text" id="source" placeholder="مثال: المختصر في التفسير">
+      
+      <!-- عناصر التحكم بحجم الخط -->
+      <div class="font-controls">
+        <button id="decreaseFont">-</button>
+        <span class="font-size-display">حجم الخط: <span id="currentFontSize">16</span>px</span>
+        <button id="increaseFont">+</button>
+      </div>
+      
+      <button id="updatePreview">تحديث المعاينة</button>
+      <button id="downloadImage">تحميل كصورة</button>
+      <!-- زر جديد للمشاركة -->
+      <button id="shareImage">مشاركة الصورة</button>
+    </div>
+    
+    <!-- قسم المعاينة -->
+    <div class="section preview">
+      <div id="previewContent">
+        <div class="header" id="surahNamePreview">اسم السورة</div>
+        <div class="verses" id="versesPreview" contenteditable="true"></div>
+        <div class="interpretation" id="interpretationPreview">
+          نص التفسير يظهر هنا.
+        </div>
+        <div class="source-box" id="sourcePreview"></div>
+      </div>
+    </div>
+  </div>
+  
+  <script>
+    // تحميل قائمة السور
+    document.addEventListener('DOMContentLoaded', function(){
+      fetch('https://api.alquran.cloud/v1/surah')
+        .then(response => response.json())
+        .then(data => {
+          if(data.status === "OK" && data.data) {
+            const surahs = data.data;
+            const surahSelect = document.getElementById('surahName');
+            surahSelect.innerHTML = "";
+            surahs.forEach(surah => {
+              const option = document.createElement('option');
+              option.value = surah.number;
+              option.textContent = surah.name;
+              surahSelect.appendChild(option);
+            });
+          }
+        })
+        .catch(error => console.error('خطأ في جلب قائمة السور:', error));
+    });
+    
+    // متغيرات حجم الخط
+    let currentFontSize = 16;
+    const minFontSize = 12;
+    const maxFontSize = 32;
+    const fontSizeStep = 2;
+    
+    // عناصر التحكم بحجم الخط
+    document.getElementById('increaseFont').addEventListener('click', function() {
+      if (currentFontSize < maxFontSize) {
+        currentFontSize += fontSizeStep;
+        updateFontSizes();
+      }
+    });
+    
+    document.getElementById('decreaseFont').addEventListener('click', function() {
+      if (currentFontSize > minFontSize) {
+        currentFontSize -= fontSizeStep;
+        updateFontSizes();
+      }
+    });
+    
+    // دالة تحديث أحجام الخطوط
+    function updateFontSizes() {
+      document.getElementById('currentFontSize').textContent = currentFontSize;
+      
+      // تحديث حجم خط الآيات (أكبر بقليل)
+      document.getElementById('versesPreview').style.fontSize = (currentFontSize + 4) + 'px';
+      
+      // تحديث حجم خط التفسير والمصدر
+      document.getElementById('interpretationPreview').style.fontSize = currentFontSize + 'px';
+      document.getElementById('sourcePreview').style.fontSize = (currentFontSize - 2) + 'px';
+      
+      // تحديث حجم خط عنوان السورة
+      document.getElementById('surahNamePreview').style.fontSize = (currentFontSize + 8) + 'px';
+    }
+  
+    // دالة تحديث المعاينة
+    document.getElementById('updatePreview').addEventListener('click', function() {
+      var surahSelect = document.getElementById('surahName');
+      var selectedOption = surahSelect.options[surahSelect.selectedIndex];
+      var surahName = selectedOption ? selectedOption.textContent : "اسم السورة";
+      document.getElementById('surahNamePreview').textContent = surahName;
+      
+      // تحديث الآيات إذا لم تُجلب مسبقًا من API
+      var versesPreviewElm = document.getElementById('versesPreview');
+      if (!versesPreviewElm.getAttribute('data-fetched')) {
+        var firstVerse = parseInt(document.getElementById('firstVerse').value) || 1;
+        var lastVerse = parseInt(document.getElementById('lastVerse').value) || firstVerse;
+        var previewHtml = "";
+        if (firstVerse === 1) {
+          previewHtml += '<p class="basmala">بسم الله الرحمن الرحيم</p>';
+          for (var i = firstVerse + 1; i <= lastVerse; i++){
+            previewHtml += 'آية ' + i + ' ' + '<span class="verse-number">' + i + '</span> ';
+          }
+        } else {
+          for (var i = firstVerse; i <= lastVerse; i++){
+            previewHtml += 'آية ' + i + ' ' + '<span class="verse-number">' + i + '</span> ';
+          }
+        }
+        versesPreviewElm.innerHTML = previewHtml;
+      }
+      
+      // تحديث نص التفسير
+      var interpretation = document.getElementById('interpretationText').value;
+      var highlightedInterpretation = interpretation.replace(/\*\*(.*?)\*\*/g, '<span style="color: red;">$1</span>');
+      var interpretationElm = document.getElementById('interpretationPreview');
+      interpretationElm.innerHTML = highlightedInterpretation;
+  
+      // تحديث مصدر التفسير
+      var source = document.getElementById('source').value;
+      document.getElementById('sourcePreview').innerHTML = source.trim();
+      
+      // تطبيق أحجام الخطوط المحددة
+      updateFontSizes();
+    });
+  
+    // جلب الآيات من API
+    document.getElementById('fetchVerses').addEventListener('click', function() {
+      var surahNumber = document.getElementById('surahName').value;
+      if (!surahNumber) {
+        alert("يرجى اختيار سورة.");
+        return;
+      }
+      var firstVerse = parseInt(document.getElementById('firstVerse').value) || 1;
+      var lastVerse = parseInt(document.getElementById('lastVerse').value) || firstVerse;
+      var url = 'https://api.alquran.cloud/v1/surah/' + surahNumber + '/ar.alafasy';
+      
+      fetch(url)
+        .then(response => response.json())
+        .then(data => {
+          if (data.status === "OK" && data.data && data.data.ayahs) {
+            var verses = data.data.ayahs.filter(ayah => ayah.numberInSurah >= firstVerse && ayah.numberInSurah <= lastVerse);
+            var versesHtml = "";
+            if (firstVerse === 1 && verses.length > 0 && verses[0].text.trim().startsWith("بسم الله")) {
+              versesHtml += '<p class="basmala">' + verses[0].text.trim() + '</p>';
+              let rest = verses.slice(1);
+              versesHtml += rest.map(function(ayah) {
+                return ayah.text + ' ' + '<span class="verse-number">' + ayah.numberInSurah + '</span>';
+              }).join(' ');
+            } else {
+              versesHtml = verses.map(function(ayah) {
+                return ayah.text + ' ' + '<span class="verse-number">' + ayah.numberInSurah + '</span>';
+              }).join(' ');
+            }
+            var versesPreviewElm = document.getElementById('versesPreview');
+            versesPreviewElm.innerHTML = versesHtml;
+            versesPreviewElm.setAttribute('data-fetched', 'true');
+            
+            // تطبيق حجم الخط بعد جلب الآيات
+            updateFontSizes();
+          } else {
+            console.error("بيانات غير متوقعة من API");
+          }
+        })
+        .catch(error => {
+          console.error('حدث خطأ أثناء جلب النص القرآني:', error);
+        });
+    });
+  
+    // تنزيل المعاينة كصورة
+    document.getElementById('downloadImage').addEventListener('click', function(){
+      html2canvas(document.getElementById('previewContent')).then(canvas => {
+        var link = document.createElement('a');
+        link.download = 'quran_image.png';
+        link.href = canvas.toDataURL();
+        link.click();
+      });
+    });
+  
+    // مشاركة الصورة باستخدام Web Share API
+    document.getElementById('shareImage').addEventListener('click', function(){
+      html2canvas(document.getElementById('previewContent')).then(canvas => {
+        canvas.toBlob(function(blob) {
+          const file = new File([blob], "quran_image.png", { type: "image/png" });
+          if (navigator.share) {
+            navigator.share({
+              files: [file],
+              title: 'صورة تفسير القرآن',
+              text: 'تفقد هذه الصورة المميزة!',
+            })
+            .then(() => console.log("تمت المشاركة بنجاح"))
+            .catch(error => console.error("خطأ أثناء المشاركة:", error));
+          } else {
+            alert("خاصية المشاركة غير مدعومة في هذا المتصفح.");
+          }
+        });
+      });
+    });
+  </script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+</body>
+</html>
